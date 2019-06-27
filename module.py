@@ -69,3 +69,44 @@ def get_walk_size(args, G): #需要修改公式
             ds[v] += degree[node]
         size_list[v] = int(args.max_each * (degree[v] / ds[v] + 1 / (1 + np.exp(-degree[v] / k))))
     return size_list, deg_map
+
+def walker(args, sub_size_list, degree, G, node_list):
+    pass
+
+def spliter(sub_set, G):
+    if len(G) == 1:
+        pass
+    else:
+        pass
+
+def convert_2_str(x):
+    str_x = []
+    for x_i in x:
+        tem = ''
+        row = len(x_i)
+        for it in x_i:
+            for y in it:
+                tem = tem + str(y) + '_'
+        tem = tem + str(row) + '_' + str(len(x_i[0]))
+        str_x.append(tem)
+    return str_x
+
+def convert_2_arr(x):
+    arr_x = []
+    # print(x)
+    tem = x.split("_")
+    row = int(tem[-2])
+    col = int(tem[-1])
+    pos = 0
+    for i in range(row):
+        tem_col = []
+        for j in range(col):
+            # print(pos)
+            tem_col.append(float(tem[pos]))
+            pos += 1
+        arr_x.append(tem_col)
+
+    return np.array(arr_x), row
+
+def batch_fn(sub, loc, glo, out):
+    pass

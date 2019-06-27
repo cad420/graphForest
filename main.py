@@ -18,8 +18,8 @@ def main():
         print("开始读取数据")
         G_list = read_graph(hp, graph_file_set[model_id])
         input_set,  results = train_data(hp, model_id, G_list[:-1])
-        eval_input_set,  results_eval = eval_data(hp, model_id, G_list[-2:])
         num_train_batches, num_train_samples = results
+        eval_input_set= eval_data(hp, model_id, G_list[-2:])
         print("读取数据完成")
 
         iter = tf.data.Iterator.from_structure(input_set.output_types, input_set.output_shapes)
@@ -30,7 +30,7 @@ def main():
         print("构建模型 graphCore %d"%(model_id+1))
         m = graphCore(hp, G_list[model_id])
         m.get_dis()
-        loss, train_op, global_step, train_summaries = m.train(xs, ys)
+        loss, train_op, global_step = m.train(xs, ys)
         exist_pre, no_exist_pre, all_pre = m.eval(xs, ys)
         print("开始训练 graphCore %d"%(model_id+1))
         with tf.Session() as sess:
@@ -39,7 +39,7 @@ def main():
             total_steps = hp.num_epochs * num_train_batches
             _gs = sess.run(global_step)
             for i in tqdm(range(_gs, total_steps+1)):
-                _, _gs, _summary = sess.run([train_op, global_step, train_summaries])
+                _, _gs = sess.run([train_op, global_step])
                 epoch = math.ceil(_gs / num_train_batches)
                 if _gs and _gs % num_train_batches == 0:
                     _loss = sess.run(loss) # train loss
