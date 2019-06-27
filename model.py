@@ -50,6 +50,7 @@ class graphCore:
     def get_dis(self):
         sub_size_list, degree = get_walk_size(self.hp, self.G)
         node_list = list(self.G.nodes())
+        node_list = node_list[degree[node_list]>3]
         per_threads_node = len(node_list) // self.hp.walkers
         results = []
         pool = Pool(processes=self.hp.walkers)

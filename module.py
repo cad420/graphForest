@@ -51,5 +51,21 @@ def Softmax(arr):
     total = np.sum(arr)
     return arr / total
 
-def get_walk_size(args, G):
-    pass
+def get_walk_size(args, G): #需要修改公式
+    node_num = len(G.nodes())
+    size_list = [0 for i in range(args.node_num)]
+    degree = [0 for i in range(args.node_num)]
+    for edge in G.edges():
+        degree[edge[0]] += 1
+        degree[edge[1]] += 1
+    deg_map = {}
+    for node in G.nodes():
+        deg_map[node] = degree[node]
+    ds = [0 for i in range(args.node_num)]
+    k = np.log10(node_num)
+    for v in G.nodes():
+        ds[v] += degree[v]
+        for node in G.neighbors(v):
+            ds[v] += degree[node]
+        size_list[v] = int(args.max_each * (degree[v] / ds[v] + 1 / (1 + np.exp(-degree[v] / k))))
+    return size_list, deg_map
