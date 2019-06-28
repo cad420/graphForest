@@ -4,7 +4,7 @@ import tensorflow as tf
 import glob
 from model import graphCore, graphForest
 from tqdm import tqdm
-from data_loader import read_graph, train_data, eval_data, test_data
+from data_loader import read_graph, train_data, eval_data
 from args import args
 import math
 
@@ -17,9 +17,13 @@ def main():
     for model_id in range(hp.graph_num):
         print("开始读取数据")
         G_list = read_graph(hp, graph_file_set[model_id])
-        input_set,  results = train_data(hp, model_id, G_list[:-1])
+        print("构建模型 graphCore %d" % (model_id + 1))
+        m = graphCore(hp, G_list[:-1])
+        m.get_dis()
+
+        input_set,  results = train_data(hp, model_id, G_list[:-1], [m.dis_local, m.dis_global])
         num_train_batches, num_train_samples = results
-        eval_input_set= eval_data(hp, model_id, G_list[-2:])
+        eval_input_set= eval_data(hp, model_id, G_list[-2:], [m.dis_local, m.dis_global])
         print("读取数据完成")
 
         iter = tf.data.Iterator.from_structure(input_set.output_types, input_set.output_shapes)
@@ -27,9 +31,7 @@ def main():
 
         train_init_op = iter.make_initializer(input_set)
         eval_init_op = iter.make_initializer(eval_input_set)
-        print("构建模型 graphCore %d"%(model_id+1))
-        m = graphCore(hp, G_list[model_id])
-        m.get_dis()
+
         loss, train_op, global_step = m.train(xs, ys)
         exist_pre, no_exist_pre, all_pre = m.eval(xs, ys)
         print("开始训练 graphCore %d"%(model_id+1))
@@ -53,7 +55,7 @@ def main():
         gF.core.append(m)
     test_file = glob.glob("../data/"+hp.dataset+"_train/*.dat")
     for i in range(len(test_file)-1):
-        G, xs, ys = test_data(hp, test_file[i:i+2])
+        G, xs, ys = eval_data(hp, test_file[i:i+2])
         gF.adjust_weight(G)
         pre = gF.voted_eval(xs, ys)
         print("graphForest 预测第%d个图的准确率为： %lf"%(i+1, pre))

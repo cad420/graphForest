@@ -41,7 +41,7 @@ def read_graph(args, file_add):
     G_set = [res.get() for res in results]
     return G_set
 
-def train_data(args, id, G_list):
+def train_data(args, id, G_list, get_dis):
     graph_filename = '../train/'+args.dataset+'_train/'+str(id)+".sub"
     if not os.path.exists(graph_filename):
         subgraph_set = generator.generate_train_data(args, id, G_list)
@@ -62,11 +62,11 @@ def train_data(args, id, G_list):
         pool = Pool(processes=args.spliter)
         for i in range(args.spliter):
             if i == args.spliter - 1:
-                results.append(pool.apply_async(spliter, (sub_set[per_spliter_each * i:], G_list[s])))
+                results.append(pool.apply_async(spliter, (sub_set[per_spliter_each * i:], G_list[s], [get_dis[0][s], get_dis[1][s]])))
             else:
                 results.append(
                     pool.apply_async(spliter,
-                                     (sub_set[per_spliter_each * i:per_spliter_each * (i + 1)], G_list[s])))
+                                     (sub_set[per_spliter_each * i:per_spliter_each * (i + 1)], G_list[s], [get_dis[0][s], get_dis[1][s]])))
         pool.close()
         pool.join()
 
@@ -116,7 +116,7 @@ def train_data(args, id, G_list):
     results = [number_samples // args.batch_size + (number_samples % args.batch_size != 0), number_samples]
     return input_dataset, results
 
-def eval_data(args, id, G_list):
+def eval_data(args, id, G_list, get_dis):
     graph_filename = '../train/'+args.dataset+'_eval/'+str(id)+".sub"
     if not os.path.exists(graph_filename):
         subgraph_set = generator.generate_eval_data(args, id, G_list)
@@ -137,11 +137,11 @@ def eval_data(args, id, G_list):
     pool = Pool(processes=args.spliter)
     for i in range(args.spliter):
         if i == args.spliter - 1:
-            results.append(pool.apply_async(spliter, (subgraph_set[per_spliter_each * i:], G_list)))
+            results.append(pool.apply_async(spliter, (subgraph_set[per_spliter_each * i:], G_list, [get_dis[0][s], get_dis[1][s]])))
         else:
             results.append(
                 pool.apply_async(spliter,
-                                 (subgraph_set[per_spliter_each * i:per_spliter_each * (i + 1)], G_list)))
+                                 (subgraph_set[per_spliter_each * i:per_spliter_each * (i + 1)], G_list, [get_dis[0][s], get_dis[1][s]])))
     pool.close()
     pool.join()
 
@@ -164,11 +164,11 @@ def eval_data(args, id, G_list):
     print("取出   验证    线程数据")
 
     shapes = (([None, None], [None, None], [None, None], ()),
-              ([None, None]))
+              ([None, None], ()))
     padded_shapes = (([None, None], [None, None], [None, None], ()),
-              ([None, None]))
-    types = ((tf.float32, tf.float32, tf.float32),
-             (tf.float32))
+              ([None, None], ()))
+    types = ((tf.float32, tf.float32, tf.float32, tf.int32),
+             (tf.float32, tf.int32))
 
     sub_s = convert_2_str(sub)
     loc_s = convert_2_str(loc)

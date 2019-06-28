@@ -7,6 +7,7 @@ def generate_train_data(args, id, G_list):
         subgraph_set = []
         sub_size_list, degree = get_walk_size(args, G)
         node_list = list(G.nodes())
+        node_list = node_list[degree[node_list]>3]
         per_threads_node = len(node_list) // args.walkers
         # 创建新线程
         results = []
@@ -31,8 +32,9 @@ def generate_train_data(args, id, G_list):
 
 def generate_eval_data(args, id, G_list):
     subgraph_set = []
-    sub_size_list, degree = get_walk_size(args, G)
-    node_list = list(G.nodes())
+    sub_size_list, degree = get_walk_size(args, G_list[0])
+    node_list = list(set(G_list[0].nodes()) & set(G_list[1].nodes()))
+    node_list = node_list[degree[node_list]>3]
     per_threads_node = len(node_list) // args.walkers
     # 创建新线程
     results = []

@@ -48,7 +48,7 @@ def onepath_walking(args, node_list, walk_size_list, G):
         dis_set[node] = deg_distribution((walks))
     return dis_set
 
-def generate_sequence(args, node_list, walk_size_list, G):
+def generate_dis(args, node_list, walk_size_list, G):
     dis_loc = neighbor_sampling(args, node_list, G)
     dis_glo = onepath_walking(args, node_list, walk_size_list, G)
     return [dis_loc, dis_glo]
