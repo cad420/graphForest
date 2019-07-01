@@ -79,29 +79,59 @@ class graphCore:
                 for jk in glo.keys():
                     self.dis_global[k][jk] = glo[jk]
 
-    def Attention(self, xs, training=True):
-        with tf.variable_scope("Attention", reuse=tf.AUTO_REUSE):
-            sub, loc, glo, seqlens = xs
-            att = multihead_attention(queries=sub,
-                                              keys=loc,
-                                              values=glo,
-                                              num_heads=self.hp.num_heads,
-                                              dropout_rate=self.hp.dropout_rate,
-                                              training=training,
-                                              causality=False)
-            for i in range(self.hp.num_blocks):
-                with tf.variable_scope("num_blocks_{}".format(i), reuse=tf.AUTO_REUSE):
-                    # self-attention
-                    att = multihead_attention(queries=att,
-                                              keys=att,
-                                              values=att,
-                                              num_heads=self.hp.num_heads,
-                                              dropout_rate=self.hp.dropout_rate,
-                                              training=training,
-                                              causality=False)
-                    # feed forward
-                    att = ff(att, num_units=[self.hp.d_ff, self.hp.d_model])
+    def Concate_Attention(self, sub, loc, glo, training=True):
+            with tf.variable_scope("sub_attention", reuse=tf.AUTO_REUSE):
+                sub = multihead_attention(queries=sub,
+                                                  keys=sub,
+                                                  values=sub,
+                                                  num_heads=self.hp.num_heads,
+                                                  dropout_rate=self.hp.dropout_rate,
+                                                  training=training,
+                                                  causality=False)
+                sub = ff(sub, num_units=[self.hp.d_ff, self.hp.d_model])
+            with tf.variable_scope("loc_attention", reuse=tf.AUTO_REUSE):
+                loc = multihead_attention(queries=loc,
+                                          keys=loc,
+                                          values=loc,
+                                          num_heads=self.hp.num_heads,
+                                          dropout_rate=self.hp.dropout_rate,
+                                          training=training,
+                                          causality=False)
+                loc = ff(loc, num_units=[self.hp.d_ff, self.hp.d_model])
+            with tf.variable_scope("glo_attention", reuse=tf.AUTO_REUSE):
+                glo = multihead_attention(queries=glo,
+                                          keys=glo,
+                                          values=glo,
+                                          num_heads=self.hp.num_heads,
+                                          dropout_rate=self.hp.dropout_rate,
+                                          training=training,
+                                          causality=False)
+
+                glo = ff(glo, num_units=[self.hp.d_ff, self.hp.d_model])
+            with tf.variable_scope("con_attention", reuse=tf.AUTO_REUSE):
+                att = multihead_attention(queries=sub,
+                                          keys=loc,
+                                          values=glo,
+                                          num_heads=self.hp.num_heads,
+                                          dropout_rate=self.hp.dropout_rate,
+                                          training=training,
+                                          causality=False)
+
+                att = ff(att, num_units=[self.hp.d_ff, self.hp.d_model])
             return att
+    def Attention(self, att, training = True):
+        for i in range(self.hp.num_blocks):
+            with tf.variable_scope("num_blocks_{}".format(i), reuse=tf.AUTO_REUSE):
+                att = multihead_attention(queries=att,
+                                          keys=att,
+                                          values=att,
+                                          num_heads=self.hp.num_heads,
+                                          dropout_rate=self.hp.dropout_rate,
+                                          training=training,
+                                          causality=False)
+                # feed forward
+                att = ff(att, num_units=[self.hp.d_ff, self.hp.d_model])
+        return att
     def Dense(self, att):
         att = tf.layers.dense(inputs=att, units=1024, activation=tf.nn.relu)
         att = tf.layers.dense(inputs=att, units=128, activation=tf.nn.relu)
@@ -110,8 +140,10 @@ class graphCore:
         return logits
 
     def train(self, xs, ys):
+        sub, loc, glo, seqlens = xs
         y, seqlens = ys
-        att = self.Attention(xs)
+        att = self.Concate_Attention(sub, loc, glo)
+        att = self.Attention(att)
         logits = self.Dense(att)
         ce = tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=y)
         loss = tf.reduce_sum(ce)
