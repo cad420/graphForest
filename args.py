@@ -35,7 +35,7 @@ class args:
 
     parser.add_argument('--dimensions', type=int, default=128,help='Number of dimensions. Default is 128.')
 
-    parser.add_argument('--dataset', default='tech-as-topology', help='The name of dataset.')
+    parser.add_argument('--dataset', default='email', help='The name of dataset.')
     parser.add_argument('--node_num', type=int, default=34765, help='The number of node.')
 
     parser.add_argument('--max_graph_size', type=int, default=10, help='The max number of subgraph size.')
