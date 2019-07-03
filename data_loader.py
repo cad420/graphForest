@@ -29,7 +29,7 @@ def read_one_graph(threadID, G_file_name):
     return G
 
 def read_graph(args, file_add):
-    files = glob.glob(file_add+"/*.dat")
+    files = glob.glob(file_add+"/*.inp")
     file_num = len(files)
     results = []
     pool = Pool(processes=file_num)
@@ -39,12 +39,21 @@ def read_graph(args, file_add):
     pool.close()
     pool.join()
     G_set = [res.get() for res in results]
-    return G_set
+    all_node = set()
+    for G in G_set:
+        all_node = all_node | set(G.nodes())
+    # print(123)
+    # print(len(all_node))
+    return G_set, len(all_node)+10
 
-def train_data(args, id, G_list, get_dis):
-    graph_filename = '../train/'+args.dataset+'_train/'+str(id)+".sub"
+def train_data(args, id, G_list, get_dis, max_node):
+    graph_filename = 'train/'+args.dataset+'_train/'+str(id)+".sub"
     if not os.path.exists(graph_filename):
-        subgraph_set = generator.generate_train_data(args, id, G_list)
+        subgraph_set = generator.generate_train_data(args, max_node, G_list)
+        try:
+            os.makedirs('train/'+args.dataset+'_train/')
+        except IOError:
+            pass
         pickle.dump(subgraph_set, open(graph_filename, 'wb'))
     else:
         print("已经存在数据，开始读取数据")
@@ -62,11 +71,11 @@ def train_data(args, id, G_list, get_dis):
         pool = Pool(processes=args.spliter)
         for i in range(args.spliter):
             if i == args.spliter - 1:
-                results.append(pool.apply_async(spliter, (sub_set[per_spliter_each * i:], G_list[s], [get_dis[0][s], get_dis[1][s]])))
+                results.append(pool.apply_async(spliter, (args, sub_set[per_spliter_each * i:], ['train', G_list[s]], [get_dis[0][s], get_dis[1][s]])))
             else:
                 results.append(
                     pool.apply_async(spliter,
-                                     (sub_set[per_spliter_each * i:per_spliter_each * (i + 1)], G_list[s], [get_dis[0][s], get_dis[1][s]])))
+                                     (args, sub_set[per_spliter_each * i:per_spliter_each * (i + 1)], ['train', G_list[s]], [get_dis[0][s], get_dis[1][s]])))
         pool.close()
         pool.join()
 
@@ -89,10 +98,14 @@ def train_data(args, id, G_list, get_dis):
 
     print("取出   训练    线程数据")
     #None是变长，其他维数固定
-    shapes = (([None, None], [None, None], [None, None], ()),
-              ([None, None]))
-    padded_shapes = (([None, None], [None, None], [None, None], ()),
-              ([None, None]))
+    # shapes = (([None, None], [None, None], [None, None]),
+    #           ([None, None]))
+    # padded_shapes = (([None, None], [None, None], [None, None]),
+    #           ([None, None]))
+    shapes = (([args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size]),
+              ([args.max_graph_size, args.max_graph_size]))
+    padded_shapes = (([args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size]),
+                     ([args.max_graph_size, args.max_graph_size]))
     types = ((tf.float32, tf.float32, tf.float32),
              (tf.float32))
 
@@ -116,10 +129,14 @@ def train_data(args, id, G_list, get_dis):
     results = [number_samples // args.batch_size + (number_samples % args.batch_size != 0), number_samples]
     return input_dataset, results
 
-def eval_data(args, id, G_list, get_dis):
-    graph_filename = '../train/'+args.dataset+'_eval/'+str(id)+".sub"
+def eval_data(args, id, G_list, get_dis, max_node):
+    graph_filename = 'train/'+args.dataset+'_eval/'+str(id)+".sub"
     if not os.path.exists(graph_filename):
-        subgraph_set = generator.generate_eval_data(args, id, G_list)
+        subgraph_set = generator.generate_eval_data(args, max_node, G_list)
+        try:
+            os.makedirs('train/'+args.dataset+'_eval/')
+        except IOError:
+            pass
         pickle.dump(subgraph_set, open(graph_filename, 'wb'))
     else:
         print("已经存在数据，开始读取数据")
@@ -137,11 +154,11 @@ def eval_data(args, id, G_list, get_dis):
     pool = Pool(processes=args.spliter)
     for i in range(args.spliter):
         if i == args.spliter - 1:
-            results.append(pool.apply_async(spliter, (subgraph_set[per_spliter_each * i:], G_list, [get_dis[0][s], get_dis[1][s]])))
+            results.append(pool.apply_async(spliter, (args, subgraph_set[per_spliter_each * i:], ['test', G_list], [get_dis[0][-2], get_dis[1][-2]])))
         else:
             results.append(
                 pool.apply_async(spliter,
-                                 (subgraph_set[per_spliter_each * i:per_spliter_each * (i + 1)], G_list, [get_dis[0][s], get_dis[1][s]])))
+                                 (args, subgraph_set[per_spliter_each * i:per_spliter_each * (i + 1)], ['test', G_list], [get_dis[0][-2], get_dis[1][-2]])))
     pool.close()
     pool.join()
 
@@ -163,12 +180,17 @@ def eval_data(args, id, G_list, get_dis):
     print("生成验证数据完成")
     print("取出   验证    线程数据")
 
-    shapes = (([None, None], [None, None], [None, None], ()),
-              ([None, None], ()))
-    padded_shapes = (([None, None], [None, None], [None, None], ()),
-              ([None, None], ()))
-    types = ((tf.float32, tf.float32, tf.float32, tf.int32),
-             (tf.float32, tf.int32))
+    # shapes = (([None, None], [None, None], [None, None]),
+    #           ([None, None]))
+    # padded_shapes = (([None, None], [None, None], [None, None]),
+    #           ([None, None]))
+    shapes = (([args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size]),
+              ([args.max_graph_size, args.max_graph_size]))
+    padded_shapes = (([args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size]),
+                     ([args.max_graph_size, args.max_graph_size]))
+
+    types = ((tf.float32, tf.float32, tf.float32),
+             (tf.float32))
 
     sub_s = convert_2_str(sub)
     loc_s = convert_2_str(loc)
@@ -176,7 +198,7 @@ def eval_data(args, id, G_list, get_dis):
     out_s = convert_2_str(output)
 
     number_samples = len(sub_s)
-    print("共有训练数据集:  ", number_samples)
+    print("共有验证数据集:  ", number_samples)
 
     input_dataset = tf.data.Dataset.from_generator(
         batch_fn,
@@ -190,4 +212,79 @@ def eval_data(args, id, G_list, get_dis):
     results = [number_samples // args.batch_size + (number_samples % args.batch_size != 0), number_samples]
     return input_dataset, results
 
+def test_data(args, G_list, get_dis, max_node):
+    graph_filename = 'train/' + args.dataset + "_test/test.sub"
+    if not os.path.exists(graph_filename):
+        subgraph_set = generator.generate_eval_data(args, max_node, G_list)
+        try:
+            os.makedirs('train/' + args.dataset + '_test/')
+        except IOError:
+            pass
+        pickle.dump(subgraph_set, open(graph_filename, 'wb'))
+    else:
+        print("已经存在数据，开始读取数据")
+        subgraph_set = pickle.load(open(graph_filename, 'rb'))
+    print("开始生成测试数据")
+    # print(subgraph_set)
+    sub = []
+    loc = []
+    glo = []
+    output = []
 
+    subset_size = len(subgraph_set)
+    per_spliter_each = subset_size // args.spliter
+    results = []
+    pool = Pool(processes=args.spliter)
+    for i in range(args.spliter):
+        if i == args.spliter - 1:
+            results.append(pool.apply_async(spliter, (
+            args, subgraph_set[per_spliter_each * i:], ['test', G_list], [get_dis[0], get_dis[1]])))
+        else:
+            results.append(
+                pool.apply_async(spliter,
+                                 (args, subgraph_set[per_spliter_each * i:per_spliter_each * (i + 1)], ['test', G_list],
+                                  [get_dis[0], get_dis[1]])))
+    pool.close()
+    pool.join()
+
+    results = [res.get() for res in results]
+    s_sub = []
+    s_loc = []
+    s_glo = []
+    s_out = []
+    for i in range(args.spliter):
+        s_sub += results[i][0]
+        s_loc += results[i][1]
+        s_glo += results[i][2]
+        s_out += results[i][3]
+    sub.extend(s_sub)
+    loc.extend(s_loc)
+    glo.extend(s_glo)
+    output.extend(s_out)
+
+    shapes = (([args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size]),
+              ([args.max_graph_size, args.max_graph_size]))
+    padded_shapes = (([args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size], [args.max_graph_size, args.max_graph_size]),
+                     ([args.max_graph_size, args.max_graph_size]))
+
+    types = ((tf.float32, tf.float32, tf.float32),
+             (tf.float32))
+
+    sub_s = convert_2_str(sub)
+    loc_s = convert_2_str(loc)
+    glo_s = convert_2_str(glo)
+    out_s = convert_2_str(output)
+
+    number_samples = len(sub_s)
+    print("共有测试数据集:  ", number_samples)
+
+    input_dataset = tf.data.Dataset.from_generator(
+        batch_fn,
+        output_shapes=shapes,
+        output_types=types,
+        args=(sub_s, loc_s, glo_s, out_s))  # <- arguments 必须是定长的，不可以是不定长的list
+
+    input_dataset = input_dataset.repeat()  # iterate forever
+    input_dataset = input_dataset.padded_batch(args.batch_size, padded_shapes, padding_values=None, drop_remainder=True).prefetch(1)
+
+    return input_dataset

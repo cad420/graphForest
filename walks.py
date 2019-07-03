@@ -4,10 +4,10 @@ import numpy as np
 from module import deg_distribution
 from queue import Queue
 
-def neighbor_sampling(args, node_list, G):
+def neighbor_sampling(args, node_list, G, max_node):
     dis_set = {}
     for node in node_list:
-        vis = [0 for j in range(args.node_num)]
+        vis = [0 for j in range(max_node)]
         walk = []
         vis[node] = 1
         q = Queue()
@@ -15,7 +15,7 @@ def neighbor_sampling(args, node_list, G):
         while len(walk) < args.walk_l and q.qsize()>0:
             u = q.get()
             walk.append(u)
-            for v in G.neighbor(u):
+            for v in G.neighbors(u):
                 if q.qsize()>= args.walk_length:
                     break
                 if not vis[v]:
@@ -24,19 +24,19 @@ def neighbor_sampling(args, node_list, G):
         dis_set[node] = deg_distribution((walk))
     return dis_set
 
-def onepath_walking(args, node_list, walk_size_list, G):
+def onepath_walking(args, node_list, walk_size_list, G, max_node):
     dis_set = {}
     for node in node_list:
         walks = []
         for k in range(walk_size_list[node]):
-            vis = [0 for j in range(args.node_num)]
+            vis = [0 for j in range(max_node)]
             walk = []
             vis[node] = 1
             walk.append(node)
             u = node
             while len(walk) < args.walk_length:
                 updata = 0
-                for v in G.neighbor(u):
+                for v in G.neighbors(u):
                     if not vis[v]:
                         vis[v] = 1
                         walk.append(v)
@@ -48,7 +48,7 @@ def onepath_walking(args, node_list, walk_size_list, G):
         dis_set[node] = deg_distribution((walks))
     return dis_set
 
-def generate_dis(args, node_list, walk_size_list, G):
-    dis_loc = neighbor_sampling(args, node_list, G)
-    dis_glo = onepath_walking(args, node_list, walk_size_list, G)
+def generate_dis(args, node_list, walk_size_list, G, max_node):
+    dis_loc = neighbor_sampling(args, node_list, G, max_node)
+    dis_glo = onepath_walking(args, node_list, walk_size_list, G, max_node)
     return [dis_loc, dis_glo]

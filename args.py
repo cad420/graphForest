@@ -9,6 +9,7 @@ class args:
 
     parser.add_argument('--lr', default=0.0003, type=float, help="learning rate")
     parser.add_argument('--warmup_steps', default=4000, type=int)
+    parser.add_argument('--num_epochs', default=10, type=int)
 
     # model
     parser.add_argument('--d_model', default=128, type=int,
@@ -30,22 +31,20 @@ class args:
     ###################################################################################################
 
     parser.add_argument('--input', nargs='?', default='graph/karate.edgelist',help='Input graph path')
-
     parser.add_argument('--output', nargs='?', default='emb/karate.emb',help='Embeddings path')
 
     parser.add_argument('--dimensions', type=int, default=128,help='Number of dimensions. Default is 128.')
 
     parser.add_argument('--dataset', default='email', help='The name of dataset.')
-    parser.add_argument('--node_num', type=int, default=34765, help='The number of node.')
-
-    parser.add_argument('--max_graph_size', type=int, default=10, help='The max number of subgraph size.')
-
-    parser.add_argument('--max_each', type=int, default=10, help='The number of subgraph samples from each node.')
+    parser.add_argument('--graph_num', type=int, default=1, help='The number of graph core.')
+    parser.add_argument('--max_graph_size', type=int, default=8, help='The max number of subgraph size.')
+    parser.add_argument('--max_each', type=int, default=1, help='The number of subgraph samples from each node.')
 
     parser.add_argument('--walkers', type=int, default=8, help='The number of walkers.')
+    parser.add_argument('--walk_l', type=int, default=4, help='The number of walkers.')
+    parser.add_argument('--walk_length', type=int, default=4, help='The number of walkers.')
 
     parser.add_argument('--spliter', type=int, default=8, help='The number of spliter.')
 
     parser.add_argument('--timestep', type=int, default=3, help='How far to transfer.')
-
     parser.add_argument('--type', default='dynamic', help='The type of training')

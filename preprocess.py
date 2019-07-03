@@ -24,7 +24,6 @@ for k, file in enumerate(files):
         edge_cnt += 1
         node_set.add(x)
         node_set.add(y)
-        edge_cnt += 1
     f.close()
     biao = {}
     cn = 1
@@ -46,6 +45,7 @@ for k, file in enumerate(files):
         if (len(temp)) < 3:
             break
         time_stamp = cou // rep_num
+        # print(time_stamp)
         if time_stamp >= hp.timestep:
             break
         edge_sort[time_stamp].append([biao[temp[0]], biao[temp[1]]])

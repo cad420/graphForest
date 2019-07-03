@@ -2,27 +2,56 @@ import tensorflow as tf
 import numpy as np
 import powerlaw
 import random
+import networkx as nx
 
 def JS(pl1, pl2): #JS散度计算
-    X = [0.01*i for i in range(100000)]
+    # return 0.1
+    X = [0.01*i for i in range(1, 100000)]
     res = 0
     for x in X:
-        p_x = pl1.c*(x**(-pl1.a))
-        q_x = pl2.c*(x**(-pl2.a))
-        res = res + p_x*np.log(2*p_x/(p_x+q_x))
+        p_x = (pl1['c']*(x**(-pl1['a'][0])))
+        q_x = (pl2['c']*(x**(-pl2['a'][0])))
+        # print(p_x,"  ",q_x)
+        # print(np.log(2*p_x/(p_x+q_x)))
+        res = res + p_x*(np.log(2*p_x/(p_x+q_x)))
+    return res
+
+def JS_graph(G1, G2): #JS散度计算
+    # return 0.1
+    seq_1 = []
+    seq_2 = []
+    for node, de in nx.degree(G1):
+        seq_1.append(de)
+    for node, de in nx.degree(G2):
+        seq_2.append(de)
+    pl1 = deg_distribution(seq_1)
+    pl2 = deg_distribution(seq_2)
+    X = [0.01*i for i in range(1, 100000)]
+    res = 0
+    for x in X:
+        p_x = (pl1['c']*(x**(-pl1['a'][0])))
+        q_x = (pl2['c']*(x**(-pl2['a'][0])))
+
+        res = res + p_x*(np.log(2*p_x/(p_x+q_x)))
     return res
 
 def deg_distribution(seq):#计算power-law 分布
     data = np.array(seq)
+    if len(data)<3:
+        dd = {}
+        dd['a'] = [random.uniform(2, 3)]
+        dd['c'] = random.uniform(4, 5)
+        return dd
+
     results = powerlaw.distribution_fit(data)
+    # print(results)
     dd = {}
-    dd.a = results.power_law.alpha
-    dd.c = results.power_law.xmin
+    dd['a'] = results['fits']['power_law'][0]
+    dd['c'] = results['fits']['power_law'][1]
     return dd
 
 def Bivalue(logist, label): #计算正确率
     logist = 1 / (1 + np.exp(-logist))
-    # print(logist)
     # print(label)
     logist[logist > 0.5] = 1.0
     logist[logist <= 0.5] = 0
@@ -50,24 +79,25 @@ def Bivalue(logist, label): #计算正确率
 def Biclass(logist): #得到预测矩阵
     logist = 1 / (1 + np.exp(-logist))
     logist[logist > 0.5] = 1.0
-    logist[logist <= 0.5] = 0
+    logist[logist <= 0.5] = 0.0
+    return logist
 
 def Softmax(arr):
     arr = np.exp(arr)
     total = np.sum(arr)
-    return arr / total
+    return (arr / total).tolist()
 
-def get_walk_size(args, G): #得到动态步长，需要修改公式
+def get_walk_size(args, G, max_node): #得到动态步长，需要修改公式
     node_num = len(G.nodes())
-    size_list = [0 for i in range(args.node_num)]
-    degree = [0 for i in range(args.node_num)]
+    size_list = [0 for i in range(max_node)]
+    degree = [0 for i in range(max_node)]
     for edge in G.edges():
         degree[edge[0]] += 1
         degree[edge[1]] += 1
     deg_map = {}
     for node in G.nodes():
         deg_map[node] = degree[node]
-    ds = [0 for i in range(args.node_num)]
+    ds = [0 for i in range(max_node)]
     k = np.log10(node_num)
     for v in G.nodes():
         ds[v] += degree[v]
@@ -76,14 +106,16 @@ def get_walk_size(args, G): #得到动态步长，需要修改公式
         size_list[v] = int(args.max_each * (degree[v] / ds[v] + 1 / (1 + np.exp(-degree[v] / k))))
     return size_list, deg_map
 
-def walker(args, sub_size_list, degree, G, node_list): # 得到子图的集合
-    G = G[-1]
+def walker(args, sub_size_list, all_node, G_p, node_list, max_node): # 得到子图的集合
+    type, G = G_p
+    if type == 'test':
+        G = G[len(G)-2]
     subgraph_set = []
     for i in node_list:
         for k in range(sub_size_list[i]):
             sub_node_num = random.randint(3, args.max_graph_size)
             seta = 5 * sub_node_num
-            tem_vis = [0 for j in range(args.node_num)]
+            tem_vis = [0 for j in range(max_node)]
             tem_node_set = set()
             sub_node_set = []
             tem_node_set.add(i)
@@ -94,7 +126,7 @@ def walker(args, sub_size_list, degree, G, node_list): # 得到子图的集合
                 sub_node_set.append(choose_node[0])
                 if len(tem_node_set) < seta:
                     for j in G.neighbors(choose_node[0]):
-                        if not tem_vis[j] and degree[j] >= 2:
+                        if not tem_vis[j] and j in all_node:
                             tem_vis[j] = 1
                             tem_node_set.add(j)
                 if (len(tem_node_set) <= 0):
@@ -102,8 +134,9 @@ def walker(args, sub_size_list, degree, G, node_list): # 得到子图的集合
             subgraph_set.append(sub_node_set)
     return subgraph_set
 
-def spliter(subgraph_set, G_list, get_dis): # 对子图加工得到输入模型的数据
-    if len(G_list) == 1:
+def spliter(args, subgraph_set, G_p, get_dis): # 对子图加工得到输入模型的数据
+    type, G_list = G_p
+    if type == 'train':
         Go = G_list
         Gn = G_list
     else:
@@ -116,24 +149,26 @@ def spliter(subgraph_set, G_list, get_dis): # 对子图加工得到输入模型�
     out = []
     for sub_set in subgraph_set:
         sub_size = len(sub_set)
-        tem_sub = np.zeros((sub_size, sub_size))
-        tem_loc = np.zeros((sub_size, sub_size))
-        tem_glo = np.zeros((sub_size, sub_size))
-        tem_out = np.zeros((sub_size, sub_size))
+        tem_sub = np.zeros((args.max_graph_size, args.max_graph_size))
+        tem_loc = np.zeros((args.max_graph_size, args.max_graph_size))
+        tem_glo = np.zeros((args.max_graph_size, args.max_graph_size))
+        tem_out = np.zeros((args.max_graph_size, args.max_graph_size))
         all_size = sub_size**2
         cou = 0
         for i, node in enumerate(sub_set):
             for j in range(i+1, sub_size):
-                if node in Go.neighbor(sub_set[j]):
+                if node in Go.neighbors(sub_set[j]):
                     cou += 1
                     tem_sub[i][j] = 1
                     tem_sub[j][i] = 1
+                # else:
+                #     continue
                 tem_loc[i][j] = JS(loc_dis[node], loc_dis[sub_set[j]])
                 tem_loc[j][i] = tem_loc[i][j]
 
                 tem_glo[i][j] = JS(glo_dis[node], glo_dis[sub_set[j]])
                 tem_glo[j][i] = tem_glo[i][j]
-                if node in Gn.neighbor(sub_set[j]):
+                if node in Gn.neighbors(sub_set[j]):
                     tem_out[i][j] = 1
                     tem_out[j][i] = 1
         if cou / all_size < 0.3:
@@ -171,15 +206,15 @@ def convert_2_arr(x): #转化为矩阵
             pos += 1
         arr_x.append(tem_col)
 
-    return np.array(arr_x), row
+    return np.array(arr_x)
 
 def batch_fn(sub, loc, glo, out): # 批量数据产生
     for sub_, loc_, glo_, out_ in zip(sub, loc, glo, out):
-        sub_, x_seqlen = convert_2_arr(sub_.decode())
-        loc, _ = convert_2_arr(loc_.decode())
-        glo_, _ = convert_2_arr(glo_.decode())
-        out_ , y_seqlen = convert_2_arr(out_.decode())
-        yield (sub_, loc_, glo_, x_seqlen), (out_, y_seqlen)
+        sub_ = convert_2_arr(sub_.decode())
+        loc_ = convert_2_arr(loc_.decode())
+        glo_ = convert_2_arr(glo_.decode())
+        out_ = convert_2_arr(out_.decode())
+        yield (sub_, loc_, glo_), (out_)
 
 def ln(inputs, epsilon=1e-8, scope="ln"): # 网络层正则化
     '''Applies layer normalization. See https://arxiv.org/abs/1607.06450.
@@ -259,7 +294,9 @@ def multihead_attention(queries, keys, values, #多头注意力
     Returns
       A 3d tensor with shape of (N, T_q, C)
     '''
+    # print(queries)
     d_model = queries.get_shape().as_list()[-1]
+    # d_model = 128
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE):
         # Linear projections
         # print(queries)
@@ -361,3 +398,24 @@ def positional_encoding(inputs,
             outputs = tf.where(tf.equal(inputs, 0), inputs, outputs)
 
         return tf.to_float(outputs)
+
+def get_token_embeddings(vocab_size, num_units, core_ID, zero_pad=True):
+    '''Constructs token embedding matrix.
+    Note that the column of index 0's are set to zeros.
+    vocab_size: scalar. V.
+    num_units: embedding dimensionalty. E.
+    zero_pad: Boolean. If True, all the values of the first row (id = 0) should be constant zero
+    To apply query/key masks easily, zero pad is turned on.
+
+    Returns
+    weight variable: (V, E)
+    '''
+    with tf.variable_scope("shared_weight_matrix"):
+        embeddings = tf.get_variable("weight_mat_%d"%core_ID,
+                                     dtype=tf.float32,
+                                     shape=(vocab_size, num_units),
+                                     initializer=tf.contrib.layers.xavier_initializer())
+        if zero_pad:
+            embeddings = tf.concat((tf.zeros(shape=[1, num_units]),
+                                    embeddings[1:, :]), 0)
+    return embeddings

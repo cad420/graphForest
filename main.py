@@ -4,8 +4,12 @@ import tensorflow as tf
 import glob
 from model import graphCore, graphForest
 from tqdm import tqdm
-from data_loader import read_graph, train_data, eval_data
+from data_loader import read_graph, train_data, eval_data, test_data
 from args import args
+from walks import generate_dis
+from module import get_walk_size
+from multiprocessing import Pool
+import numpy as np
 import math
 
 def main():
@@ -13,17 +17,17 @@ def main():
     parser = hparams.parser
     hp = parser.parse_args()
     gF = graphForest(hp)
-    graph_file_set = glob.glob("../data/"+hp.dataset+"_train/*")
+    graph_file_set = glob.glob("data/"+hp.dataset+"/train/*")
     for model_id in range(hp.graph_num):
         print("开始读取数据")
-        G_list = read_graph(hp, graph_file_set[model_id])
+        G_list, max_node = read_graph(hp, graph_file_set[model_id])
         print("构建模型 graphCore %d" % (model_id + 1))
-        m = graphCore(hp, G_list[:-1])
+        m = graphCore(hp, model_id, G_list, max_node)
         m.get_dis()
 
-        input_set,  results = train_data(hp, model_id, G_list[:-1], [m.dis_local, m.dis_global])
-        num_train_batches, num_train_samples = results
-        eval_input_set= eval_data(hp, model_id, G_list[-2:], [m.dis_local, m.dis_global])
+        input_set,  train_results = train_data(hp, model_id, G_list[:-1], [m.dis_local, m.dis_global], m.max_node)
+        num_train_batches, num_train_samples = train_results
+        eval_input_set, eval_results = eval_data(hp, model_id, G_list[len(G_list)-2:], [m.dis_local, m.dis_global], m.max_node)
         print("读取数据完成")
 
         iter = tf.data.Iterator.from_structure(input_set.output_types, input_set.output_shapes)
@@ -52,12 +56,47 @@ def main():
                     print("综合预测准确率为：  ", al_pre)
                     print("Epoch : %02d   loss : %.2f" % (epoch, _loss))
                     sess.run(train_init_op)
-        gF.core.append(m)
-    test_file = glob.glob("../data/"+hp.dataset+"_train/*.dat")
-    for i in range(len(test_file)-1):
-        G, xs, ys = eval_data(hp, test_file[i:i+2])
-        gF.adjust_weight(G)
-        pre = gF.voted_eval(xs, ys)
-        print("graphForest 预测第%d个图的准确率为： %lf"%(i+1, pre))
+        gF.add_core(m)
+
+    test_file = "data/"+hp.dataset+"/test/"
+    G_list, max_node = read_graph(hp, test_file)
+    gF.adjust_weight(G_list[0])
+    sub_size_list, degree = get_walk_size(hp, G_list[0], max_node)
+    node_list = list(G_list[0].nodes())
+    # node_list = [x for x in node_list if degree[x] > 3]
+    per_threads_node = len(node_list) // hp.walkers
+    results = []
+    pool = Pool(processes=hp.walkers)
+    for i in range(hp.walkers):
+        if i == hp.walkers - 1:
+            results.append(
+                pool.apply_async(generate_dis,
+                                 (hp, node_list[per_threads_node * i:], sub_size_list, G_list[0], max_node)))
+        else:
+            results.append(pool.apply_async(generate_dis, (
+                hp, node_list[per_threads_node * i:per_threads_node * (i + 1)], sub_size_list, G_list[0], max_node)))
+    pool.close()
+    pool.join()
+    results = [res.get() for res in results]
+    loc_dis = {}
+    glo_dis = {}
+    for loc, glo in results:
+        for jk in loc.keys():
+            loc_dis[jk] = loc[jk]
+        for jk in glo.keys():
+            glo_dis[jk] = glo[jk]
+    test_input_set = test_data(hp, G_list, [loc_dis, glo_dis], max_node)
+    iter = tf.data.Iterator.from_structure(test_input_set.output_types, test_input_set.output_shapes)
+    xs, ys = iter.get_next()
+    test_init_op = iter.make_initializer(test_input_set)
+
+    exist_pre, no_exist_pre, all_pre = gF.voted_eval(xs, ys)
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        sess.run(test_init_op)
+        pre, no_pre, al_pre = sess.run([exist_pre, no_exist_pre, all_pre])
+        print("\n有边的预测准确率为：  ", pre)
+        print("无边的预测准确率为：  ", no_pre)
+        print("综合预测准确率为：  ", al_pre)
 if __name__ == '__main__':
     main()
