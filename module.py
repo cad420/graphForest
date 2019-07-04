@@ -3,17 +3,20 @@ import numpy as np
 import powerlaw
 import random
 import networkx as nx
+from sklearn.linear_model import LinearRegression
 
 def JS(pl1, pl2): #JS散度计算
     # return 0.1
-    X = [0.01*i for i in range(1, 100000)]
+    X = [1*i for i in range(1, 100)]
     res = 0
+    # print(pl1)
+    # print(pl2)
     for x in X:
-        p_x = (pl1['c']*(x**(-pl1['a'][0])))
-        q_x = (pl2['c']*(x**(-pl2['a'][0])))
-        # print(p_x,"  ",q_x)
-        # print(np.log(2*p_x/(p_x+q_x)))
-        res = res + p_x*(np.log(2*p_x/(p_x+q_x)))
+        p_x = (pl1['c']*(x**(-pl1['a'])))
+        q_x = (pl2['c']*(x**(-pl2['a'])))
+        # print(p_x)
+        # print(q_x)
+        res = res + 0.5*p_x*(np.log(2*p_x/(p_x+q_x))) + 0.5*q_x*(np.log(2*q_x/(p_x+q_x)))
     return res
 
 def JS_graph(G1, G2): #JS散度计算
@@ -29,25 +32,41 @@ def JS_graph(G1, G2): #JS散度计算
     X = [0.01*i for i in range(1, 100000)]
     res = 0
     for x in X:
-        p_x = (pl1['c']*(x**(-pl1['a'][0])))
-        q_x = (pl2['c']*(x**(-pl2['a'][0])))
-
-        res = res + p_x*(np.log(2*p_x/(p_x+q_x)))
+        p_x = (pl1['c']*(x**(pl1['a'])))
+        q_x = (pl2['c']*(x**(pl2['a'])))
+        # print(p_x)
+        # print(q_x)
+        res = res + 0.5*p_x*(np.log(2*p_x/(p_x+q_x))) + 0.5*q_x*(np.log(2*q_x/(p_x+q_x)))
     return res
 
 def deg_distribution(seq):#计算power-law 分布
-    data = np.array(seq)
-    if len(data)<3:
-        dd = {}
-        dd['a'] = [random.uniform(2, 3)]
-        dd['c'] = random.uniform(4, 5)
-        return dd
+    # data = np.array(seq)
+    # print(data)
+    # if len(data):
+    #     dd = {}
+    #     dd['a'] = [random.uniform(2, 3)]
+    #     dd['c'] = random.uniform(4, 5)
+    #     return dd
+    # results = powerlaw.distribution_fit(data)
+    # # print(results)
+    # dd = {}
+    # dd['a'] = results['fits']['power_law'][0][0]
+    # dd['c'] = results['fits']['power_law'][1]
 
-    results = powerlaw.distribution_fit(data)
-    # print(results)
+    biao = {}
+    node_set = list(set(seq))
+    y = []
+    for node in node_set:
+        biao[node] = 0
+    for i in seq:
+        biao[i] += 1
+    for node in node_set:
+        y.append(biao[node])
+    fun = LinearRegression()
+    fun.fit(np.log(np.array(node_set)).reshape(-1, 1), np.log(np.array(y)))
     dd = {}
-    dd['a'] = results['fits']['power_law'][0]
-    dd['c'] = results['fits']['power_law'][1]
+    dd['c'] = np.exp(fun.coef_)
+    dd['a'] = fun.intercept_
     return dd
 
 def Bivalue(logist, label): #计算正确率
@@ -78,14 +97,21 @@ def Bivalue(logist, label): #计算正确率
 
 def Biclass(logist): #得到预测矩阵
     logist = 1 / (1 + np.exp(-logist))
+    # print(logist)
     logist[logist > 0.5] = 1.0
     logist[logist <= 0.5] = 0.0
     return logist
 
+def sigmoid(x):
+    s = 1 / (1 + np.exp(-x))
+    return s
+
 def Softmax(arr):
+    arr = np.array(arr)
+    arr = sigmoid(arr)
     arr = np.exp(arr)
     total = np.sum(arr)
-    return (arr / total).tolist()
+    return arr / total
 
 def get_walk_size(args, G, max_node): #得到动态步长，需要修改公式
     node_num = len(G.nodes())
@@ -161,8 +187,6 @@ def spliter(args, subgraph_set, G_p, get_dis): # 对子图加工得到输入模�
                     cou += 1
                     tem_sub[i][j] = 1
                     tem_sub[j][i] = 1
-                # else:
-                #     continue
                 tem_loc[i][j] = JS(loc_dis[node], loc_dis[sub_set[j]])
                 tem_loc[j][i] = tem_loc[i][j]
 

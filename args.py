@@ -14,7 +14,7 @@ class args:
     # model
     parser.add_argument('--d_model', default=128, type=int,
                         help="hidden dimension of encoder/decoder")
-    parser.add_argument('--d_ff', default=1024, type=int,
+    parser.add_argument('--d_ff', default=512, type=int,
                         help="hidden dimension of feedforward layer")
     parser.add_argument('--num_blocks', default=6, type=int,
                         help="number of encoder/decoder blocks")
@@ -36,15 +36,14 @@ class args:
     parser.add_argument('--dimensions', type=int, default=128,help='Number of dimensions. Default is 128.')
 
     parser.add_argument('--dataset', default='email', help='The name of dataset.')
-    parser.add_argument('--graph_num', type=int, default=1, help='The number of graph core.')
+    parser.add_argument('--graph_num', type=int, default=3, help='The number of graph core.')
     parser.add_argument('--max_graph_size', type=int, default=8, help='The max number of subgraph size.')
-    parser.add_argument('--max_each', type=int, default=1, help='The number of subgraph samples from each node.')
+    parser.add_argument('--max_each', type=int, default=5, help='The number of subgraph samples from each node.')
 
     parser.add_argument('--walkers', type=int, default=8, help='The number of walkers.')
-    parser.add_argument('--walk_l', type=int, default=4, help='The number of walkers.')
-    parser.add_argument('--walk_length', type=int, default=4, help='The number of walkers.')
+    parser.add_argument('--walk_l', type=int, default=80, help='The number of walkers.')
+    parser.add_argument('--walk_length', type=int, default=80, help='The number of walkers.')
 
     parser.add_argument('--spliter', type=int, default=8, help='The number of spliter.')
 
     parser.add_argument('--timestep', type=int, default=3, help='How far to transfer.')
-    parser.add_argument('--type', default='dynamic', help='The type of training')

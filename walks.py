@@ -4,7 +4,7 @@ import numpy as np
 from module import deg_distribution
 from queue import Queue
 
-def neighbor_sampling(args, node_list, G, max_node):
+def neighbor_sampling(args, node_list, G, max_node, degree):
     dis_set = {}
     for node in node_list:
         vis = [0 for j in range(max_node)]
@@ -21,10 +21,10 @@ def neighbor_sampling(args, node_list, G, max_node):
                 if not vis[v]:
                     q.put(v)
                     vis[v] = 1
-        dis_set[node] = deg_distribution((walk))
+        dis_set[node] = deg_distribution([degree[i] for i in walk])
     return dis_set
 
-def onepath_walking(args, node_list, walk_size_list, G, max_node):
+def onepath_walking(args, node_list, walk_size_list, G, max_node, degree):
     dis_set = {}
     for node in node_list:
         walks = []
@@ -45,10 +45,10 @@ def onepath_walking(args, node_list, walk_size_list, G, max_node):
                 if not updata:
                     break
             walks.extend(walk)
-        dis_set[node] = deg_distribution((walks))
+        dis_set[node] = deg_distribution([degree[i] for i in walks])
     return dis_set
 
-def generate_dis(args, node_list, walk_size_list, G, max_node):
-    dis_loc = neighbor_sampling(args, node_list, G, max_node)
-    dis_glo = onepath_walking(args, node_list, walk_size_list, G, max_node)
+def generate_dis(args, node_list, walk_size_list, G, max_node, degree):
+    dis_loc = neighbor_sampling(args, node_list, G, max_node, degree)
+    dis_glo = onepath_walking(args, node_list, walk_size_list, G, max_node, degree)
     return [dis_loc, dis_glo]

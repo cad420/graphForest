@@ -17,14 +17,14 @@ class graphForest:
     def add_core(self, core):
         self.core.append(core)
         self.core_num += 1
-        self.G.append(core.G[-1])
+        self.G.append(self.core[self.core_num-1].G[-1])
 
 
     def update(self, ID_G):
         pass
 
     def adjust_weight(self, G_new):
-        js = np.zeros((self.core_num))
+        js = [0.0 for i in range(self.core_num)]
         for i in range(self.core_num):
             js[i] = JS_graph(self.G[i], G_new)
         self.weight = Softmax(js)
@@ -67,10 +67,10 @@ class graphCore:
             for i in range(self.hp.walkers):
                 if i == self.hp.walkers - 1:
                     results.append(
-                        pool.apply_async(generate_dis, (self.hp, node_list[per_threads_node * i:], sub_size_list, G, self.max_node)))
+                        pool.apply_async(generate_dis, (self.hp, node_list[per_threads_node * i:], sub_size_list, G, self.max_node, degree)))
                 else:
                     results.append(pool.apply_async(generate_dis, (
-                    self.hp, node_list[per_threads_node * i:per_threads_node * (i + 1)], sub_size_list, G, self.max_node)))
+                    self.hp, node_list[per_threads_node * i:per_threads_node * (i + 1)], sub_size_list, G, self.max_node, degree)))
             pool.close()
             pool.join()
             results = [res.get() for res in results]
@@ -141,10 +141,11 @@ class graphCore:
                 att = ff(att, num_units=[self.hp.d_ff, self.hp.d_model])
         return att
     def Dense(self, att):
-        att = tf.layers.dense(inputs=att, units=1024, activation=tf.nn.relu)
-        att = tf.layers.dense(inputs=att, units=128, activation=tf.nn.relu)
-        att = tf.einsum('ntd,nkd->ntk', att, att)  # (N, T2, T2)
-        logits = (att + tf.transpose(att, [0, 2, 1])) / 2  # 强制最终结果为一个对称矩阵，符合
+        with tf.variable_scope("Dense_%d" % (self.core_ID), reuse=tf.AUTO_REUSE):
+            att = tf.layers.dense(inputs=att, units=1024, activation=tf.nn.relu)
+            att = tf.layers.dense(inputs=att, units=128, activation=tf.nn.relu)
+            att = tf.einsum('ntd,nkd->ntk', att, att)  # (N, T2, T2)
+            logits = (att + tf.transpose(att, [0, 2, 1])) / 2  # 强制最终结果为一个对称矩阵，符合
         return logits
 
     def train(self, xs, ys):
